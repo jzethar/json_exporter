@@ -36,6 +36,8 @@ type JSONMetric struct {
 	Type                   config.ScrapeType
 	KeyJSONPath            string
 	ValueJSONPath          string
+	ValueJSONType          string
+	ValueJSONBase          string
 	LabelsJSONPaths        []string
 	ValueType              prometheus.ValueType
 	EpochTimestampJSONPath string
@@ -91,7 +93,7 @@ func (mc JSONMetricCollector) Collect(ch chan<- prometheus.Metric) {
 						continue
 					}
 
-					if floatValue, err := SanitizeValue(value); err == nil {
+					if floatValue, err := SanitizeValue(value, m.ValueJSONType, m.ValueJSONBase); err == nil {
 						metric := prometheus.MustNewConstMetric(
 							m.Desc,
 							m.ValueType,

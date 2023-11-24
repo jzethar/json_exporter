@@ -29,7 +29,33 @@ type Metric struct {
 	ValueType      ValueType
 	EpochTimestamp string
 	Help           string
-	Values         map[string]string
+	Values         map[string]Value
+}
+
+type Value struct {
+	Type        string
+	Base        string
+	PathToToken string `yaml:"path"`
+}
+
+func (a *Value) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type ValueTmp Value
+	var v ValueTmp
+	err := unmarshal(&v)
+	if err != nil {
+		var s string
+		if err := unmarshal(&s); err != nil {
+			return err
+		}
+		a.Base = "default"
+		a.PathToToken = s
+		a.Type = "int"
+	} else {
+		a.Base = v.Base
+		a.PathToToken = v.PathToToken
+		a.Type = v.Type
+	}
+	return nil
 }
 
 type ScrapeType string

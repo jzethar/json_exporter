@@ -48,6 +48,41 @@ func TestSanitizeValue(t *testing.T) {
 	}
 }
 
+func TestSanitizeValue2(t *testing.T) {
+	tests := []struct {
+		Input          string
+		V1             string
+		V2             string
+		ExpectedOutput float64
+		ShouldSucceed  bool
+	}{
+		{"1234", "int", "dec", 1234.0, true},
+		{"0xb4432", "int", "hex", 738354.0, true},
+		{"5666", "int", "oct", 2998.0, true},
+		{"1234.5", "float", "", 1234.5, true},
+		{"Nov 17, 2023, 12:00:00 AM", "date", "", 1700179200.0, true},
+		{"true", "", "", 1.0, true},
+		{"TRUE", "", "", 1.0, true},
+		{"False", "", "", 0.0, true},
+		{"FALSE", "", "", 0.0, true},
+		{"abcd", "", "", 0, false},
+		{"{}", "", "", 0, false},
+		{"[]", "", "", 0, false},
+		{"", "", "", 0, false},
+		{"''", "", "", 0, false},
+	}
+
+	for i, test := range tests {
+		actualOutput, err := SanitizeValue(test.Input, test.V1, test.V2)
+		if err != nil && test.ShouldSucceed {
+			t.Fatalf("Value snitization test %d failed with an unexpected error.\nINPUT:\n%q\nERR:\n%s", i, test.Input, err)
+		}
+		if test.ShouldSucceed && actualOutput != test.ExpectedOutput {
+			t.Fatalf("Value sanitization test %d fails unexpectedly.\nGOT:\n%f\nEXPECTED:\n%f", i, actualOutput, test.ExpectedOutput)
+		}
+	}
+}
+
 func TestSanitizeValueNaN(t *testing.T) {
 	actualOutput, err := SanitizeValue("<nil>")
 	if err != nil {

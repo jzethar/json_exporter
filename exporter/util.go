@@ -26,6 +26,7 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/araddon/dateparse"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus-community/json_exporter/config"
@@ -37,7 +38,72 @@ func MakeMetricName(parts ...string) string {
 	return strings.Join(parts, "_")
 }
 
-func SanitizeValue(s string) (float64, error) {
+func SanitizeValue(s string, typeValue ...string) (float64, error) {
+	var err error
+	var value float64
+	var resultErr string
+	if len(typeValue) != 0 {
+		nonDefaultType := typeValue[0] // here we supose to have first value - type and second - base (only for int)
+		switch nonDefaultType {
+		case "int":
+			{
+				base := typeValue[1]
+				switch base {
+				case "dec":
+					if strings.Contains(s, "e") || strings.Contains(s, "E") { // unfrotunately ParseInt doesn't accept nums like: 8.443e7
+						var valueFloat, err = strconv.ParseFloat(s, 64)
+						if err == nil {
+							return float64(valueFloat), nil
+						}
+					} else {
+						var valueInt, err = strconv.ParseInt(s, 10, 64)
+						if err == nil {
+							return float64(valueInt), nil
+						}
+						resultErr = fmt.Sprintf("%s", err)
+					}
+				case "oct":
+					var valueInt, err = strconv.ParseInt(s, 8, 64)
+					if err == nil {
+						return float64(valueInt), nil
+					}
+					resultErr = fmt.Sprintf("%s", err)
+				case "hex":
+					if strings.Contains(s, "0x") || strings.Contains(s, "x") {
+						_, s, _ = strings.Cut(s, "x")
+					}
+					var valueInt, err = strconv.ParseInt(s, 16, 64)
+					if err == nil {
+						return float64(valueInt), nil
+					}
+					resultErr = fmt.Sprintf("%s", err)
+				default:
+					return SanitizeValueDefault(s)
+				}
+			}
+		case "date":
+			{
+				if t, err := dateparse.ParseAny(s); err == nil {
+					return float64(t.Unix()), nil
+				}
+				resultErr = resultErr + "; " + fmt.Sprintf("%s", err)
+			}
+		case "float":
+			{
+				if value, err = strconv.ParseFloat(s, 64); err == nil {
+					return value, nil
+				}
+				resultErr = fmt.Sprintf("%s", err)
+			}
+		default:
+			return SanitizeValueDefault(s)
+		}
+		return value, fmt.Errorf(resultErr)
+	}
+	return SanitizeValueDefault(s)
+}
+
+func SanitizeValueDefault(s string) (float64, error) {
 	var err error
 	var value float64
 	var resultErr string
@@ -52,6 +118,10 @@ func SanitizeValue(s string) (float64, error) {
 			return 1.0, nil
 		}
 		return 0.0, nil
+	}
+	resultErr = resultErr + "; " + fmt.Sprintf("%s", err)
+	if t, err := dateparse.ParseAny(s); err == nil {
+		return float64(t.Unix()), nil
 	}
 	resultErr = resultErr + "; " + fmt.Sprintf("%s", err)
 
@@ -126,7 +196,9 @@ func CreateMetricsList(c config.Module) ([]JSONMetric, error) {
 						nil,
 					),
 					KeyJSONPath:            metric.Path,
-					ValueJSONPath:          valuePath,
+					ValueJSONPath:          valuePath.PathToToken,
+					ValueJSONType:          valuePath.Type,
+					ValueJSONBase:          valuePath.Base,
 					LabelsJSONPaths:        variableLabelsValues,
 					ValueType:              valueType,
 					EpochTimestampJSONPath: metric.EpochTimestamp,
